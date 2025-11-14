@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Escalação Atlético HG</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Biblioteca html2canvas para salvar imagem -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    .campo {
+      background: linear-gradient(180deg, #157a2e 0%, #0f6b2a 100%);
+      position: relative;
+      overflow: hidden;
+      aspect-ratio: 9 / 16;
+      border-radius: 1rem;
+    }
+    .player-wrap {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.1rem;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));
+      cursor: grab;
+      user-select: none;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+    }
+    .player-wrap.dragging {
+      opacity: 0.8;
+      cursor: grabbing;
+      z-index: 100;
+    }
+    .player-shirt {
+      width: 50px;
+      height: 55px;
+      background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+      border-radius: 10px 10px 15px 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative;
+      border: 2px solid #fbbf24;
+    }
+    /* Decote em V */
+    .player-shirt::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 15px;
+      height: 8px;
+      background: #1e3a8a;
+      border: 2px solid #fbbf24;
+      border-bottom: none;
+      border-radius: 8px 8px 0 0;
+    }
+    /* Mangas */
+    .player-shirt .sleeve {
+      position: absolute;
+      top: 8px;
+      width: 18px;
+      height: 20px;
+      background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+      border: 2px solid #fbbf24;
+      border-radius: 8px;
+    }
+    .player-shirt .sleeve.left {
+      left: -12px;
+      transform: rotate(-15deg);
+    }
+    .player-shirt .sleeve.right {
+      right: -12px;
+      transform: rotate(15deg);
+    }
+    .player-number {
+      font-weight: 900;
+      font-size: 18px;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+      margin-top: 12px;
+      margin-bottom: 2px;
+    }
+    .player-name {
+      font-weight: 700;
+      font-size: 7px;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      text-align: center;
+      max-width: 45px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .hamburger-menu {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1000;
+    }
+    .menu-content {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      min-width: 180px;
+    }
+    .menu-content.show {
+      display: block;
+    }
+    .titulo {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      z-index: 1000;
+      background: white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+    .edit-modal {
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .player-edit-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .player-edit-item:last-child {
+      border-bottom: none;
+    }
+    .substitution-modal {
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .player-sub-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      border-bottom: 1px solid #e5e5e5;
+      cursor: pointer;
+    }
+    .player-sub-item:hover {
+      background-color: #f5f5f5;
+    }
+    .player-sub-item:last-child {
+      border-bottom: none;
+    }
+    .player-reserve {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    .player-reserve .player-shirt {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    .player-reserve .player-shirt::before {
+      background: #4b5563;
+    }
+    .player-reserve .sleeve {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    }
+    .reserves-container {
+      position: fixed;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.5rem;
+      z-index: 100;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .reserve-player {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      padding: 0.25rem;
+      border-radius: 0.25rem;
+      transition: background-color 0.2s;
+    }
+    .reserve-player:hover {
+      background-color: #e5e7eb;
+    }
+    .reserve-shirt {
+      width: 40px;
+      height: 44px;
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+      border-radius: 8px 8px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative;
+      border: 2px solid #9ca3af;
+    }
+    .reserve-shirt::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 12px;
+      height: 6px;
+      background: #4b5563;
+      border: 2px solid #9ca3af;
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+    .reserve-shirt .sleeve {
+      position: absolute;
+      top: 6px;
+      width: 14px;
+      height: 16px;
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+      border: 2px solid #9ca3af;
+      border-radius: 6px;
+    }
+    .reserve-shirt .sleeve.left {
+      left: -10px;
+      transform: rotate(-15deg);
+    }
+    .reserve-shirt .sleeve.right {
+      right: -10px;
+      transform: rotate(15deg);
+    }
+    .reserve-number {
+      font-weight: 900;
+      font-size: 14px;
+      color: white;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+      margin-top: 10px;
+      margin-bottom: 2px;
+    }
+    .reserve-name {
+      font-weight: 700;
+      font-size: 6px;
+      color: white;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      text-align: center;
+      max-width: 36px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .btn-danger {
+      background-color: #ef4444;
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      border: none;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .btn-danger:hover {
+      background-color: #dc2626;
+    }
+    .btn-success {
+      background-color: #10b981;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.25rem;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-success:hover {
+      background-color: #059669;
+    }
+    .add-player-form {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-bottom: 1px solid #e5e5e5;
+    }
+    .add-player-form input {
+      border: 1px solid #d1d5db;
+      border-radius: 0.25rem;
+      padding: 0.5rem;
+    }
+    .add-player-form input:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+    .player-actions {
+      display: flex;
+      gap: 0.25rem;
+    }
+    .player-edit-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .player-edit-info {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 1;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+  <div class="w-full max-w-3xl">
+    <!-- Título -->
+    <div class="titulo">
+      Escalação Atlético HG
+    </div>
+
+    <!-- Menu Hambúrguer -->
+    <div class="hamburger-menu">
+      <button id="menuBtn" class="bg-white p-3 rounded-lg shadow-lg hover:bg-gray-100">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </button>
+      <div id="menuContent" class="menu-content">
+        <button id="editBtn" class="w-full text-left px-4 py-2 hover:bg-gray-100 border-b">Editar Jogadores</button>
+        <button id="reservesBtn" class="w-full text-left px-4 py-2 hover:bg-gray-100 border-b">Gerenciar Reservas</button>
+        <button id="resetBtn" class="w-full text-left px-4 py-2 hover:bg-gray-100 border-b">Resetar</button>
+        <button id="saveImageBtn" class="w-full text-left px-4 py-2 hover:bg-gray-100">Salvar Imagem</button>
+      </div>
+    </div>
+
+    <!-- Campo -->
+    <div id="campo" class="campo">
+      <svg class="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+        <rect x="5" y="5" width="calc(100% - 10)" height="calc(100% - 10)" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="4" rx="6"/>
+        <rect x="calc(50% - 140px)" y="calc(100% - 200px)" width="280" height="160" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+        <rect x="calc(50% - 140px)" y="40" width="280" height="160" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+        <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+        <circle cx="50%" cy="50%" r="40" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="3"/>
+      </svg>
+
+      <!-- Jogadores -->
+      <div id="playersContainer" class="absolute inset-0">
+        <!-- Cada jogador será renderizado dinamicamente -->
+      </div>
+    </div>
+
+    <!-- Reservas -->
+    <div id="reservesContainer" class="reserves-container">
+      <!-- Reservas serão renderizadas aqui -->
+    </div>
+
+    <!-- Modal de edição em lista -->
+    <div id="editModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 z-50">
+      <div class="bg-white rounded-lg w-full max-w-2xl p-5 mx-4 edit-modal">
+        <h2 class="text-lg font-bold mb-3">Editar Jogadores</h2>
+        
+        <!-- Formulário para adicionar novo jogador -->
+        <div class="add-player-form">
+          <input type="number" id="newPlayerNumber" placeholder="Número" class="w-20" min="0">
+          <input type="text" id="newPlayerName" placeholder="Nome do Jogador" class="flex-1">
+          <button id="addPlayerBtn" class="btn-success">Adicionar</button>
+        </div>
+        
+        <div id="editPlayersList" class="space-y-2 mb-4">
+          <!-- Lista de jogadores será gerada aqui -->
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" id="closeEditModal" class="px-3 py-1 rounded border">Cancelar</button>
+          <button type="button" id="saveEditModal" class="px-3 py-1 rounded bg-blue-600 text-white">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de substituição -->
+    <div id="substitutionModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 z-50">
+      <div class="bg-white rounded-lg w-full max-w-2xl p-5 mx-4 substitution-modal">
+        <h2 class="text-lg font-bold mb-3">Substituir Jogador</h2>
+        <p class="mb-4 text-gray-600">Selecione um jogador para substituir:</p>
+        <div id="substitutionPlayersList" class="space-y-2 mb-4">
+          <!-- Lista de jogadores será gerada aqui -->
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" id="closeSubstitutionModal" class="px-3 py-1 rounded border">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de gerenciamento de reservas -->
+    <div id="reservesModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 z-50">
+      <div class="bg-white rounded-lg w-full max-w-2xl p-5 mx-4 edit-modal">
+        <h2 class="text-lg font-bold mb-3">Gerenciar Reservas</h2>
+        
+        <!-- Formulário para adicionar nova reserva -->
+        <div class="add-player-form">
+          <input type="number" id="newReserveNumber" placeholder="Número" class="w-20" min="0">
+          <input type="text" id="newReserveName" placeholder="Nome do Jogador" class="flex-1">
+          <button id="addReserveBtn" class="btn-success">Adicionar</button>
+        </div>
+        
+        <div id="reservesEditList" class="space-y-2 mb-4">
+          <!-- Lista de reservas será gerada aqui -->
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" id="closeReservesModal" class="px-3 py-1 rounded border">Cancelar</button>
+          <button type="button" id="saveReservesModal" class="px-3 py-1 rounded bg-blue-600 text-white">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Jogadores iniciais
+    const initialPlayers = [
+      { id: 1, name: 'FARMÁCIA', number: 1, left: 50, top: 92 },
+      { id: 2, name: 'GUEBOSON', number: 2, left: 85, top: 75 },
+      { id: 3, name: 'COMANDO', number: 3, left: 65, top: 72 },
+      { id: 6, name: 'BAIXINHO', number: 6, left: 15, top: 75 },
+      { id: 5, name: 'EDSON', number: 5, left: 40, top: 55 },
+      { id: 8, name: 'ADRIANO', number: 8, left: 60, top: 55 },
+      { id: 15, name: 'DEDE', number: 15, left: 50, top: 62 },
+      { id: 10, name: 'JAEDSON', number: 10, left: 30, top: 40 },
+      { id: 7, name: 'ELANO', number: 7, left: 70, top: 40 },
+      { id: 11, name: 'LINDINALDO', number: 11, left: 20, top: 35 },
+      { id: 9, name: 'JUNIOR', number: 9, left: 50, top: 20 },
+    ];
+
+    // Reservas iniciais
+    const initialReserves = [
+      { id: 101, name: 'GLEBSON', number: 17 },
+      { id: 102, name: 'AZEVEDO', number: 5 },
+      { id: 103, name: 'ELANO', number: 20 },
+      { id: 104, name: 'BRUNO', number: 6 },
+    ];
+
+    // Carrega jogadores e reservas do localStorage ou usa os iniciais
+    let players = loadPlayers();
+    let reserves = loadReserves();
+    let selectedReserve = null;
+
+    function loadPlayers() {
+      const saved = localStorage.getItem('atletico-hg-players');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return JSON.parse(JSON.stringify(initialPlayers));
+    }
+
+    function loadReserves() {
+      const saved = localStorage.getItem('atletico-hg-reserves');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+      return JSON.parse(JSON.stringify(initialReserves));
+    }
+
+    function savePlayers() {
+      localStorage.setItem('atletico-hg-players', JSON.stringify(players));
+    }
+
+    function saveReserves() {
+      localStorage.setItem('atletico-hg-reserves', JSON.stringify(reserves));
+    }
+
+    // Gerador de IDs únicos
+    function generateId() {
+      return Date.now() + Math.floor(Math.random() * 1000);
+    }
+
+    const campo = document.getElementById('campo');
+    const container = document.getElementById('playersContainer');
+    const reservesContainer = document.getElementById('reservesContainer');
+    const menuBtn = document.getElementById('menuBtn');
+    const menuContent = document.getElementById('menuContent');
+    const editModal = document.getElementById('editModal');
+    const editPlayersList = document.getElementById('editPlayersList');
+    const substitutionModal = document.getElementById('substitutionModal');
+    const substitutionPlayersList = document.getElementById('substitutionPlayersList');
+    const reservesModal = document.getElementById('reservesModal');
+    const reservesEditList = document.getElementById('reservesEditList');
+
+    function renderPlayers() {
+      container.innerHTML = '';
+      players.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'player-wrap';
+        div.style.left = p.left + '%';
+        div.style.top = p.top + '%';
+        div.dataset.id = p.id;
+
+        div.innerHTML = `
+          <div class="player-shirt">
+            <div class="sleeve left"></div>
+            <div class="sleeve right"></div>
+            <div class="player-number">${p.number}</div>
+            <div class="player-name">${p.name}</div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderReserves() {
+      reservesContainer.innerHTML = '';
+      reserves.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'reserve-player';
+        div.dataset.id = r.id;
+        
+        div.innerHTML = `
+          <div class="reserve-shirt">
+            <div class="sleeve left"></div>
+            <div class="sleeve right"></div>
+            <div class="reserve-number">${r.number}</div>
+            <div class="reserve-name">${r.name}</div>
+          </div>
+        `;
+        
+        div.addEventListener('click', () => {
+          selectedReserve = r;
+          openSubstitutionModal();
+        });
+        
+        reservesContainer.appendChild(div);
+      });
+    }
+
+    function renderEditModal() {
+      editPlayersList.innerHTML = '';
+      players.forEach(player => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player-edit-item';
+        playerDiv.innerHTML = `
+          <div class="player-edit-info">
+            <input 
+              type="number" 
+              min="0" 
+              value="${player.number}" 
+              data-id="${player.id}" 
+              class="number-input w-16 border rounded px-2 py-1 text-center"
+            >
+            <input 
+              type="text" 
+              value="${player.name}" 
+              data-id="${player.id}" 
+              class="name-input flex-1 border rounded px-3 py-1"
+            >
+          </div>
+          <div class="player-actions">
+            <button type="button" class="btn-danger delete-player" data-id="${player.id}">Excluir</button>
+          </div>
+        `;
+        editPlayersList.appendChild(playerDiv);
+      });
+      
+      // Adiciona event listeners para os botões de exclusão
+      document.querySelectorAll('.delete-player').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          deletePlayer(id);
+        });
+      });
+    }
+
+    function renderReservesEditModal() {
+      reservesEditList.innerHTML = '';
+      reserves.forEach(reserve => {
+        const reserveDiv = document.createElement('div');
+        reserveDiv.className = 'player-edit-item';
+        reserveDiv.innerHTML = `
+          <div class="player-edit-info">
+            <input 
+              type="number" 
+              min="0" 
+              value="${reserve.number}" 
+              data-id="${reserve.id}" 
+              class="reserve-number-input w-16 border rounded px-2 py-1 text-center"
+            >
+            <input 
+              type="text" 
+              value="${reserve.name}" 
+              data-id="${reserve.id}" 
+              class="reserve-name-input flex-1 border rounded px-3 py-1"
+            >
+          </div>
+          <div class="player-actions">
+            <button type="button" class="btn-danger delete-reserve" data-id="${reserve.id}">Excluir</button>
+          </div>
+        `;
+        reservesEditList.appendChild(reserveDiv);
+      });
+      
+      // Adiciona event listeners para os botões de exclusão
+      document.querySelectorAll('.delete-reserve').forEach(button => {
+        button.addEventListener('click', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          deleteReserve(id);
+        });
+      });
+    }
+
+    function openSubstitutionModal() {
+      substitutionPlayersList.innerHTML = '';
+      players.forEach(player => {
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player-sub-item';
+        playerDiv.innerHTML = `
+          <div class="flex items-center gap-3">
+            <div class="font-bold">${player.number}</div>
+            <div>${player.name}</div>
+          </div>
+          <div class="text-blue-600 font-medium">Substituir</div>
+        `;
+        
+        playerDiv.addEventListener('click', () => {
+          substitutePlayer(player.id, selectedReserve.id);
+          substitutionModal.classList.add('hidden');
+          substitutionModal.classList.remove('flex');
+        });
+        
+        substitutionPlayersList.appendChild(playerDiv);
+      });
+      
+      substitutionModal.classList.remove('hidden');
+      substitutionModal.classList.add('flex');
+    }
+
+    function substitutePlayer(playerId, reserveId) {
+      const playerIndex = players.findIndex(p => p.id === playerId);
+      const reserveIndex = reserves.findIndex(r => r.id === reserveId);
+      
+      if (playerIndex !== -1 && reserveIndex !== -1) {
+        const player = players[playerIndex];
+        const reserve = reserves[reserveIndex];
+        
+        // Troca as posições
+        players[playerIndex] = {
+          ...reserve,
+          left: player.left,
+          top: player.top
+        };
+        
+        reserves[reserveIndex] = {
+          ...player,
+          left: null,
+          top: null
+        };
+        
+        savePlayers();
+        saveReserves();
+        renderPlayers();
+        renderReserves();
+      }
+    }
+
+    // Função para adicionar novo jogador
+    function addPlayer(number, name) {
+      if (!number || !name) {
+        alert('Por favor, preencha o número e o nome do jogador');
+        return false;
+      }
+      
+      // Verifica se o número já existe
+      if (players.some(p => p.number === parseInt(number))) {
+        alert('Já existe um jogador com este número');
+        return false;
+      }
+      
+      const newPlayer = {
+        id: generateId(),
+        number: parseInt(number),
+        name: name.toUpperCase(),
+        left: 50,
+        top: 50
+      };
+      
+      players.push(newPlayer);
+      renderEditModal();
+      return true;
+    }
+    
+    // Função para excluir jogador
+    function deletePlayer(id) {
+      if (confirm('Tem certeza que deseja excluir este jogador?')) {
+        players = players.filter(p => p.id !== id);
+        renderEditModal();
+      }
+    }
+    
+    // Função para adicionar nova reserva
+    function addReserve(number, name) {
+      if (!number || !name) {
+        alert('Por favor, preencha o número e o nome do jogador');
+        return false;
+      }
+      
+      // Verifica se o número já existe
+      if (reserves.some(r => r.number === parseInt(number))) {
+        alert('Já existe uma reserva com este número');
+        return false;
+      }
+      
+      const newReserve = {
+        id: generateId(),
+        number: parseInt(number),
+        name: name.toUpperCase()
+      };
+      
+      reserves.push(newReserve);
+      renderReservesEditModal();
+      return true;
+    }
+    
+    // Função para excluir reserva
+    function deleteReserve(id) {
+      if (confirm('Tem certeza que deseja excluir esta reserva?')) {
+        reserves = reserves.filter(r => r.id !== id);
+        renderReservesEditModal();
+      }
+    }
+
+    // Renderiza os jogadores e reservas inicialmente
+    renderPlayers();
+    renderReserves();
+
+    // ---- Menu Hambúrguer ----
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuContent.classList.toggle('show');
+    });
+
+    // Fecha o menu quando clicar fora
+    document.addEventListener('click', () => {
+      menuContent.classList.remove('show');
+    });
+
+    // ---- Abrir modal de edição ----
+    document.getElementById('editBtn').addEventListener('click', () => {
+      menuContent.classList.remove('show');
+      renderEditModal();
+      editModal.classList.remove('hidden');
+      editModal.classList.add('flex');
+      
+      // Foca no primeiro input
+      setTimeout(() => {
+        const firstInput = editModal.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 100);
+    });
+
+    // ---- Abrir modal de gerenciamento de reservas ----
+    document.getElementById('reservesBtn').addEventListener('click', () => {
+      menuContent.classList.remove('show');
+      renderReservesEditModal();
+      reservesModal.classList.remove('hidden');
+      reservesModal.classList.add('flex');
+      
+      // Foca no primeiro input
+      setTimeout(() => {
+        const firstInput = reservesModal.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 100);
+    });
+
+    // ---- Fechar modal de edição ----
+    document.getElementById('closeEditModal').addEventListener('click', () => {
+      editModal.classList.add('hidden');
+      editModal.classList.remove('flex');
+    });
+
+    // ---- Fechar modal de substituição ----
+    document.getElementById('closeSubstitutionModal').addEventListener('click', () => {
+      substitutionModal.classList.add('hidden');
+      substitutionModal.classList.remove('flex');
+    });
+
+    // ---- Fechar modal de reservas ----
+    document.getElementById('closeReservesModal').addEventListener('click', () => {
+      reservesModal.classList.add('hidden');
+      reservesModal.classList.remove('flex');
+    });
+
+    // ---- Adicionar novo jogador ----
+    document.getElementById('addPlayerBtn').addEventListener('click', () => {
+      const numberInput = document.getElementById('newPlayerNumber');
+      const nameInput = document.getElementById('newPlayerName');
+      
+      if (addPlayer(numberInput.value, nameInput.value)) {
+        // Limpa os campos após adicionar
+        numberInput.value = '';
+        nameInput.value = '';
+        numberInput.focus();
+      }
+    });
+    
+    // Permite adicionar jogador pressionando Enter
+    document.getElementById('newPlayerName').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('addPlayerBtn').click();
+      }
+    });
+
+    // ---- Adicionar nova reserva ----
+    document.getElementById('addReserveBtn').addEventListener('click', () => {
+      const numberInput = document.getElementById('newReserveNumber');
+      const nameInput = document.getElementById('newReserveName');
+      
+      if (addReserve(numberInput.value, nameInput.value)) {
+        // Limpa os campos após adicionar
+        numberInput.value = '';
+        nameInput.value = '';
+        numberInput.focus();
+      }
+    });
+    
+    // Permite adicionar reserva pressionando Enter
+    document.getElementById('newReserveName').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('addReserveBtn').click();
+      }
+    });
+
+    // ---- Salvar edições ----
+    document.getElementById('saveEditModal').addEventListener('click', () => {
+      // Coleta todos os dados do formulário
+      const numberInputs = editModal.querySelectorAll('.number-input');
+      const nameInputs = editModal.querySelectorAll('.name-input');
+      
+      numberInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const player = players.find(p => p.id === id);
+        if (player) {
+          player.number = parseInt(input.value) || 0;
+        }
+      });
+      
+      nameInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const player = players.find(p => p.id === id);
+        if (player) {
+          player.name = input.value.toUpperCase();
+        }
+      });
+      
+      // Salva no localStorage e renderiza
+      savePlayers();
+      renderPlayers();
+      editModal.classList.add('hidden');
+      editModal.classList.remove('flex');
+    });
+
+    // ---- Salvar edições de reservas ----
+    document.getElementById('saveReservesModal').addEventListener('click', () => {
+      // Coleta todos os dados do formulário
+      const numberInputs = reservesModal.querySelectorAll('.reserve-number-input');
+      const nameInputs = reservesModal.querySelectorAll('.reserve-name-input');
+      
+      numberInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const reserve = reserves.find(r => r.id === id);
+        if (reserve) {
+          reserve.number = parseInt(input.value) || 0;
+        }
+      });
+      
+      nameInputs.forEach(input => {
+        const id = parseInt(input.dataset.id);
+        const reserve = reserves.find(r => r.id === id);
+        if (reserve) {
+          reserve.name = input.value.toUpperCase();
+        }
+      });
+      
+      // Salva no localStorage e renderiza
+      saveReserves();
+      renderReserves();
+      reservesModal.classList.add('hidden');
+      reservesModal.classList.remove('flex');
+    });
+
+    editModal.addEventListener('click', (e) => {
+      if (e.target === editModal) {
+        document.getElementById('closeEditModal').click();
+      }
+    });
+
+    substitutionModal.addEventListener('click', (e) => {
+      if (e.target === substitutionModal) {
+        document.getElementById('closeSubstitutionModal').click();
+      }
+    });
+
+    reservesModal.addEventListener('click', (e) => {
+      if (e.target === reservesModal) {
+        document.getElementById('closeReservesModal').click();
+      }
+    });
+
+    // ---- Drag funcionalidade ----
+    let dragging = null;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    container.addEventListener('mousedown', startDrag);
+    container.addEventListener('touchstart', startDrag, { passive: false });
+
+    function startDrag(e) {
+      e.preventDefault();
+      const target = e.target.closest('.player-wrap');
+      if (!target) return;
+      
+      dragging = target;
+      const id = parseInt(dragging.dataset.id);
+      const player = players.find(p => p.id === id);
+      
+      // Posições iniciais
+      startLeft = player.left;
+      startTop = player.top;
+      
+      // Coordenadas do mouse/toque
+      if (e.type === 'mousedown') {
+        startX = e.clientX;
+        startY = e.clientY;
+      } else {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }
+      
+      dragging.classList.add('dragging');
+      
+      // Adiciona event listeners
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('touchmove', onDrag, { passive: false });
+      document.addEventListener('mouseup', stopDrag);
+      document.addEventListener('touchend', stopDrag);
+    }
+
+    function onDrag(e) {
+      if (!dragging) return;
+      
+      e.preventDefault();
+      
+      let clientX, clientY;
+      if (e.type === 'mousemove') {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      } else {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      }
+      
+      const rect = campo.getBoundingClientRect();
+      
+      // Calcula o deslocamento em pixels
+      const deltaX = clientX - startX;
+      const deltaY = clientY - startY;
+      
+      // Converte para porcentagem (considerando o tamanho do campo)
+      const deltaXPercent = (deltaX / rect.width) * 100;
+      const deltaYPercent = (deltaY / rect.height) * 100;
+      
+      // Nova posição
+      let newLeft = startLeft + deltaXPercent;
+      let newTop = startTop + deltaYPercent;
+      
+      // Limita aos limites do campo
+      newLeft = Math.max(2, Math.min(98, newLeft));
+      newTop = Math.max(2, Math.min(98, newTop));
+      
+      // Atualiza visualmente
+      dragging.style.left = newLeft + '%';
+      dragging.style.top = newTop + '%';
+    }
+
+    function stopDrag() {
+      if (dragging) {
+        // Salva a posição final
+        const id = parseInt(dragging.dataset.id);
+        const player = players.find(p => p.id === id);
+        if (player) {
+          player.left = parseFloat(dragging.style.left);
+          player.top = parseFloat(dragging.style.top);
+          savePlayers(); // Salva automaticamente ao mover
+        }
+        
+        dragging.classList.remove('dragging');
+        dragging = null;
+        
+        // Remove event listeners
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchend', stopDrag);
+      }
+    }
+
+    // ---- Resetar ----
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      if (confirm('Deseja restaurar a escalação original?')) {
+        players = JSON.parse(JSON.stringify(initialPlayers));
+        reserves = JSON.parse(JSON.stringify(initialReserves));
+        localStorage.removeItem('atletico-hg-players');
+        localStorage.removeItem('atletico-hg-reserves');
+        renderPlayers();
+        renderReserves();
+        menuContent.classList.remove('show');
+      }
+    });
+
+    // ---- Salvar imagem ----
+    document.getElementById('saveImageBtn').addEventListener('click', async () => {
+      menuContent.classList.remove('show');
+      const campoEl = document.getElementById('campo');
+      try {
+        const canvas = await html2canvas(campoEl, { 
+          backgroundColor: null, 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true
+        });
+        const link = document.createElement('a');
+        link.download = 'escalacao-atletico-hg.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      } catch (error) {
+        alert('Erro ao salvar imagem. Tente novamente.');
+        console.error('Erro ao salvar imagem:', error);
+      }
+    });
+
+    // Fecha modais com ESC
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (!editModal.classList.contains('hidden')) {
+          document.getElementById('closeEditModal').click();
+        }
+        if (!substitutionModal.classList.contains('hidden')) {
+          document.getElementById('closeSubstitutionModal').click();
+        }
+        if (!reservesModal.classList.contains('hidden')) {
+          document.getElementById('closeReservesModal').click();
+        }
+        menuContent.classList.remove('show');
+      }
+    });
+  </script>
+</body>
+</html>
